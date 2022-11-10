@@ -1,32 +1,8 @@
 use std::collections::HashMap;
 
+use crate::station::{Edge, Nearest, Station, StationDto, StationNode, StationResponse};
 use reqwest;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
-
-use crate::station::{Edge, Nearest, Station, StationDto, StationNode, StationResponse};
-
-const URL: &str = "https://api.digitransit.fi/routing/v1/routers/hsl/index/graphql";
-const QUERY: &str = "{
-    nearest(lat:60.24020252949141, lon: 25.10188542043851, filterByPlaceTypes:[BICYCLE_RENT]) {
-        edges {
-            node {
-                id
-                distance
-                place {
-                    ... on BikeRentalStation {
-                        stationId
-                        name
-                        bikesAvailable
-                        spacesAvailable
-                        lat
-                        lon
-                        allowDropoff
-                    }
-                }
-            }
-        }
-    }
-}";
 
 fn edge_to_station(edge: &Edge) -> Station {
     let node: &StationNode = &edge.node;
@@ -51,40 +27,52 @@ fn map_response_to_stations(response: &StationResponse) -> Vec<Station> {
 }
 
 fn create_payload() -> HashMap<String, String> {
+    let query = "{
+        nearest(lat:60.24020252949141, lon: 25.10188542043851, filterByPlaceTypes:[BICYCLE_RENT]) {
+            edges {
+                node {
+                    id
+                    distance
+                    place {
+                        ... on BikeRentalStation {
+                            stationId
+                            name
+                            bikesAvailable
+                            spacesAvailable
+                            lat
+                            lon
+                            allowDropoff
+                        }
+                    }
+                }
+            }
+        }
+    }";
     let mut payload = HashMap::new();
-    payload.insert(String::from("query"), String::from(QUERY));
+    payload.insert(String::from("query"), String::from(query));
     payload
 }
 
-pub async fn fetch_stations() {
-    println!("Fetching stations from {}", URL);
-
+pub fn do_fetch(url: &str) -> Result<StationResponse, reqwest::Error> {
     let payload = create_payload();
 
-    match reqwest::Client::new()
-        .post(URL)
+    reqwest::blocking::Client::new()
+        .post(url)
         .header(CONTENT_TYPE, "application/json")
         .header(ACCEPT, "application/json")
         .json(&payload)
-        .send()
-        .await
-    {
-        Ok(response) => match response.json::<StationResponse>().await {
-            Ok(station_response) => {
-                let stations = map_response_to_stations(&station_response);
+        .send()?
+        .json::<StationResponse>()
+}
 
-                for station in stations {
-                    println!("{:?}", station);
-                    println!("---");
-                }
-            }
-            Err(err) => {
-                panic!("JSON parse error! {:?}", err);
-            }
-        },
+pub fn fetch_stations(url: &str) -> Vec<Station> {
+    let response = do_fetch(&url);
 
+    match response {
+        Ok(station_response) => map_response_to_stations(&station_response),
         Err(err) => {
-            panic!("Oh no! Request failed {:?}", err);
+            println!("Err {:?}", err);
+            Vec::<Station>::with_capacity(0)
         }
-    };
+    }
 }

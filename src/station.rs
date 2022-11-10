@@ -1,5 +1,3 @@
-use std::fmt::{self, write};
-
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
