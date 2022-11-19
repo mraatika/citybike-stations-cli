@@ -2,29 +2,26 @@ use crate::api::fetch_stations;
 use station_table::print_table;
 use std::env;
 
+pub mod address;
 pub mod api;
 pub mod station;
-pub mod station_response;
 pub mod station_table;
 
 // 60.24020252949141 25.10188542043851
 
 fn main() {
-    const URL: &str = "https://api.digitransit.fi/routing/v1/routers/hsl/index/graphql";
-
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 3 {
-        panic!("Latitude and longitude are needed!");
+    if args.len() < 2 {
+        panic!("Search term is missing!");
     }
 
-    let lat = &args[1];
-    let lon = &args[2];
+    let search_term = &args[1];
 
-    println!("Searching stations with coordinates {lat}, {lon}");
-
-    let stations = fetch_stations(&URL, &lat, &lon);
-    print_table(stations);
-    println!("");
-    println!("Tiedot haettu: {URL}");
+    if search_term.is_empty() {
+        println!("Search term is empty, nothing to be done!");
+    } else {
+        let stations = fetch_stations(&search_term);
+        print_table(stations);
+    }
 }

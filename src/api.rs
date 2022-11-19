@@ -1,15 +1,18 @@
 use std::collections::HashMap;
 
+use crate::address::{get_coords_from_address, AddressResponse, Coords};
 use crate::station::Station;
-use crate::station_response::StationResponse;
+use crate::station::{response_to_stations, StationResponse};
 
 use reqwest;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
 
-fn create_payload(lat: &str, lon: &str) -> HashMap<String, String> {
+static SERVER_URL: &str = "https://api.digitransit.fi";
+
+fn create_payload_for_station_query(coords: Coords) -> HashMap<String, String> {
     let query = format!(
         "{{
-        nearest(lat: {lat}, lon: {lon}, filterByPlaceTypes:[BICYCLE_RENT]) {{
+        nearest(lat: {}, lon: {}, filterByPlaceTypes:[BICYCLE_RENT]) {{
             edges {{
                 node {{
                     id
@@ -28,7 +31,8 @@ fn create_payload(lat: &str, lon: &str) -> HashMap<String, String> {
                 }}
             }}
         }}
-    }}"
+    }}",
+        coords.0, coords.1
     );
 
     let mut payload = HashMap::new();
@@ -36,10 +40,10 @@ fn create_payload(lat: &str, lon: &str) -> HashMap<String, String> {
     payload
 }
 
-pub fn do_fetch(
-    url: &str,
+fn send_stations_query(
     payload: &HashMap<String, String>,
 ) -> Result<StationResponse, reqwest::Error> {
+    let url = format!("{SERVER_URL}/routing/v1/routers/hsl/index/graphql");
     reqwest::blocking::Client::new()
         .post(url)
         .header(CONTENT_TYPE, "application/json")
@@ -49,12 +53,37 @@ pub fn do_fetch(
         .json::<StationResponse>()
 }
 
-pub fn fetch_stations(url: &str, lat: &str, lon: &str) -> Vec<Station> {
-    let payload = create_payload(&lat, &lon);
-    let response = do_fetch(&url, &payload);
+fn fetch_stations_with_location(coords: Coords) -> Vec<Station> {
+    let payload = create_payload_for_station_query(coords);
+    let response = send_stations_query(&payload);
 
     match response {
-        Ok(station_response) => station_response.get_stations(),
+        Ok(station_response) => response_to_stations(station_response),
+        Err(err) => {
+            println!("Err {:?}", err);
+            Vec::<Station>::with_capacity(0)
+        }
+    }
+}
+
+fn fetch_location_by_address(search_term: &str) -> Result<AddressResponse, reqwest::Error> {
+    let url = format!("{SERVER_URL}/geocoding/v1/search");
+    reqwest::blocking::Client::new()
+        .get(&url)
+        .query(&[("text", &search_term), ("size", &"1"), ("lang", &"fi")])
+        .header(ACCEPT, "application/json")
+        .send()?
+        .json::<AddressResponse>()
+}
+
+pub fn fetch_stations(search_term: &str) -> Vec<Station> {
+    let address_response = fetch_location_by_address(&search_term);
+
+    match address_response {
+        Ok(address_response) => {
+            let coords = get_coords_from_address(&address_response);
+            fetch_stations_with_location(coords)
+        }
         Err(err) => {
             println!("Err {:?}", err);
             Vec::<Station>::with_capacity(0)
