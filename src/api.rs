@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use crate::station::{Edge, Station, StationDto, StationNode, StationResponse};
+use crate::station::Station;
+use crate::station_response::StationResponse;
+
 use reqwest;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
 
@@ -47,33 +49,12 @@ pub fn do_fetch(
         .json::<StationResponse>()
 }
 
-fn edge_to_station(edge: Edge) -> Station {
-    let node: &StationNode = &edge.node;
-    let place: &StationDto = &node.place;
-
-    Station {
-        station_id: place.station_id.clone(),
-        name: place.name.clone(),
-        bikes_available: place.bikes_available,
-        spaces_available: place.spaces_available,
-        lat: place.lat,
-        lon: place.lon,
-        distance: node.distance,
-        allow_dropoff: place.allow_dropoff,
-    }
-}
-
-fn map_response_to_stations(response: StationResponse) -> Vec<Station> {
-    let edges: Vec<Edge> = response.data.nearest.edges;
-    edges.into_iter().map(|e| edge_to_station(e)).collect()
-}
-
 pub fn fetch_stations(url: &str, lat: &str, lon: &str) -> Vec<Station> {
     let payload = create_payload(&lat, &lon);
     let response = do_fetch(&url, &payload);
 
     match response {
-        Ok(station_response) => map_response_to_stations(station_response),
+        Ok(station_response) => station_response.get_stations(),
         Err(err) => {
             println!("Err {:?}", err);
             Vec::<Station>::with_capacity(0)

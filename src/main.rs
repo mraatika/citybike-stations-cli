@@ -4,6 +4,7 @@ use std::env;
 
 pub mod api;
 pub mod station;
+pub mod station_response;
 pub mod station_table;
 
 // 60.24020252949141 25.10188542043851
